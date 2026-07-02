@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medicare Inpatient Cost &amp; Quality Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+<style>
+:root {
+  --bg-primary:#f6f7f9; --bg-card:#ffffff; --bg-header:#12263a;
+  --text-primary:#1f2937; --text-secondary:#6b7280; --text-on-dark:#ffffff;
+  --c1:#2c7fb8; --c2:#e07a5f; --c3:#41ab5d; --c4:#c44e52; --c5:#8172b3; --c6:#e0a800;
+  --gap:16px; --radius:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.5}
+.wrap{max-width:1400px;margin:0 auto;padding:var(--gap)}
+header.dash{background:var(--bg-header);color:var(--text-on-dark);padding:20px 24px;border-radius:var(--radius);margin-bottom:var(--gap);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+header.dash h1{font-size:20px;font-weight:650}
+header.dash .sub{font-size:12.5px;color:rgba(255,255,255,.65);margin-top:2px}
+.filter-group{display:flex;align-items:center;gap:8px}
+.filter-group label{font-size:12px;color:rgba(255,255,255,.7)}
+.filter-group select{padding:6px 10px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(255,255,255,.1);color:#fff;font-size:13px}
+.filter-group select option{background:var(--bg-header)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--gap);margin-bottom:var(--gap)}
+.kpi{background:var(--bg-card);border-radius:var(--radius);padding:18px 22px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.kpi .label{font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.kpi .value{font-size:27px;font-weight:700}
+.kpi .note{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:var(--gap);margin-bottom:var(--gap)}
+.card{background:var(--bg-card);border-radius:var(--radius);padding:18px 22px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card h3{font-size:14px;font-weight:600;margin-bottom:2px}
+.card .hint{font-size:12px;color:var(--text-secondary);margin-bottom:12px}
+.card canvas{max-height:320px}
+.tablecard{margin-bottom:var(--gap);overflow-x:auto}
+.tablebar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.tablebar select{padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff;color:var(--text-primary)}
+table.data{width:100%;border-collapse:collapse;font-size:13px}
+table.data thead th{text-align:left;padding:9px 12px;border-bottom:2px solid #e5e7eb;color:var(--text-secondary);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;cursor:pointer;user-select:none}
+table.data thead th:hover{color:var(--text-primary);background:#f8f9fa}
+table.data tbody td{padding:8px 12px;border-bottom:1px solid #f1f2f4;white-space:nowrap}
+table.data tbody tr:hover{background:#f8f9fa}
+footer{font-size:12px;color:var(--text-secondary);padding:8px 4px 24px}
+@media(max-width:768px){.charts{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media print{.filter-group{display:none}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="dash">
+    <div>
+      <h1>Medicare Inpatient Care: Cost &amp; Quality</h1>
+      <div class="sub">CMS Medicare Inpatient Hospitals (by Provider &amp; Service) &times; Care Compare star ratings &mdash; analyzed in SQL</div>
+    </div>
+    <div class="filter-group">
+      <label for="stateSel">Highlight state</label>
+      <select id="stateSel" onchange="onStateChange()"><option value="">None</option></select>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpiRow"></section>
+
+  <section class="charts">
+    <div class="card" style="grid-column:1/-1">
+      <h3>Where the money goes: top MS-DRGs by Medicare spend</h3>
+      <div class="hint">Volume-weighted; share of total national inpatient Medicare payments</div>
+      <canvas id="chDrg"></canvas>
+    </div>
+    <div class="card">
+      <h3>Average payment per discharge by state (top 20)</h3>
+      <div class="hint">Volume-weighted across all DRGs &mdash; use the header dropdown to spotlight any state</div>
+      <canvas id="chState"></canvas>
+      <div class="hint" id="stateSpot" style="margin:10px 0 0"></div>
+    </div>
+    <div class="card">
+      <h3>Do 5-star hospitals cost more?</h3>
+      <div class="hint">Payment per discharge by Care Compare overall rating</div>
+      <canvas id="chRating"></canvas>
+    </div>
+    <div class="card">
+      <h3>Billing markup by hospital ownership</h3>
+      <div class="hint">Billed charges &divide; actual payments, volume-weighted</div>
+      <canvas id="chOwner"></canvas>
+    </div>
+    <div class="card">
+      <h3>Where care happens: rural vs urban volume</h3>
+      <div class="hint">Share of national discharges by RUCA area type</div>
+      <canvas id="chRuca"></canvas>
+    </div>
+  </section>
+
+  <section class="card tablecard">
+    <div class="tablebar">
+      <div>
+        <h3>Query explorer</h3>
+        <div class="hint">Full result set of each SQL analysis &mdash; click headers to sort</div>
+      </div>
+      <select id="querySel" onchange="renderTable()"></select>
+    </div>
+    <div id="tableHost"></div>
+  </section>
+
+  <footer>
+    Source: CMS Medicare Inpatient Hospitals &ndash; by Provider and Service; CMS Hospital General Information.
+    Original Medicare (fee-for-service) Part A only; rows with &lt;11 discharges suppressed by CMS.
+    Built with PostgreSQL &rarr; Chart.js.
+  </footer>
+</div>
+
+<script>
+const DATA = {"q01_national_kpis": {"columns": ["hospitals", "distinct_drgs", "total_discharges", "billed_charges_usd_bn", "total_payments_usd_bn", "medicare_payments_usd_bn", "charge_to_payment_ratio", "avg_payment_per_discharge"], "rows": [[2945, 534, 4960325, 432.17, 88.41, 73.39, 4.89, 17824.0]]}, "q02_top_drgs_volume_spend": {"columns": ["drg_code", "drg_desc", "discharges", "medicare_spend_usd_bn", "avg_payment_per_discharge", "pct_of_total_spend", "cumulative_pct"], "rows": [["871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 561795, 8.49, 17658.0, 11.6, 11.6], ["291", "HEART FAILURE AND SHOCK WITH MCC", 319702, 3.08, 11581.0, 4.2, 15.8], ["853", "INFECTIOUS AND PARASITIC DISEASES WITH O.R. PROCEDURES WITH MCC", 78526, 3.07, 44839.0, 4.2, 19.9], ["177", "RESPIRATORY INFECTIONS AND INFLAMMATIONS WITH MCC", 166662, 2.31, 16044.0, 3.1, 23.1], ["267", "ENDOVASCULAR CARDIAC VALVE REPLACEMENT AND SUPPLEMENT PROCEDURES WITHOUT MCC", 39207, 1.62, 44535.0, 2.2, 25.3], ["003", "ECMO OR TRACHEOSTOMY WITH MV >96 HOURS OR PRINCIPAL DIAGNOSIS EXCEPT FACE, MOUTH AND NEC", 6835, 1.38, 236101.0, 1.9, 27.2], ["274", "PERCUTANEOUS AND OTHER INTRACARDIAC PROCEDURES WITHOUT MCC", 52963, 1.32, 27504.0, 1.8, 29.0], ["870", "SEPTICEMIA OR SEVERE SEPSIS WITH MV >96 HOURS", 21332, 1.2, 63211.0, 1.6, 30.6], ["193", "SIMPLE PNEUMONIA AND PLEURISY WITH MCC", 125793, 1.18, 11455.0, 1.6, 32.2], ["266", "ENDOVASCULAR CARDIAC VALVE REPLACEMENT AND SUPPLEMENT PROCEDURES WITH MCC", 20681, 1.11, 57675.0, 1.5, 33.7], ["280", "ACUTE MYOCARDIAL INFARCTION, DISCHARGED ALIVE WITH MCC", 83150, 1.01, 14470.0, 1.4, 35.1], ["470", "MAJOR HIP AND KNEE JOINT REPLACEMENT OR REATTACHMENT OF LOWER EXTREMITY WITHOUT MCC", 71939, 0.99, 16799.0, 1.3, 36.4], ["481", "HIP AND FEMUR PROCEDURES EXCEPT MAJOR JOINT WITH CC", 62714, 0.97, 17895.0, 1.3, 37.8], ["064", "INTRACRANIAL HEMORRHAGE OR CEREBRAL INFARCTION WITH MCC", 63186, 0.96, 18247.0, 1.3, 39.1], ["454", "COMBINED ANTERIOR AND POSTERIOR SPINAL FUSION WITH CC", 19004, 0.91, 57029.0, 1.2, 40.3]]}, "q03_state_spending_rankings": {"columns": ["state", "hospitals", "discharges", "medicare_spend_usd_bn", "payment_per_discharge", "markup_ratio", "cost_rank", "spend_rank"], "rows": [["DC", 6, 16246, 0.38, 31118.0, 4.15, 1, 37], ["AK", 8, 9387, 0.19, 24894.0, 5.53, 2, 49], ["HI", 12, 10883, 0.2, 23850.0, 3.18, 3, 48], ["NY", 129, 329669, 6.4, 23533.0, 4.84, 4, 2], ["CA", 275, 441929, 8.94, 23330.0, 6.32, 5, 1], ["MD", 44, 130663, 2.78, 23098.0, 1.11, 6, 8], ["MN", 45, 73158, 1.31, 21974.0, 3.2, 7, 20], ["OR", 30, 36366, 0.67, 21804.0, 3.15, 8, 30], ["CT", 26, 55936, 0.92, 19893.0, 3.39, 9, 23], ["UT", 29, 23134, 0.38, 19658.0, 3.46, 10, 38], ["WA", 45, 84147, 1.35, 19625.0, 4.4, 11, 18], ["MA", 54, 183445, 3.02, 19237.0, 2.57, 12, 6], ["CO", 48, 46569, 0.74, 18848.0, 6.89, 13, 27], ["ME", 17, 13805, 0.2, 17889.0, 3.27, 14, 46], ["NE", 24, 33434, 0.51, 17775.0, 3.82, 15, 35], ["WY", 9, 5800, 0.09, 17713.0, 2.88, 16, 51], ["NJ", 63, 172827, 2.5, 17701.0, 6.26, 17, 9], ["AZ", 58, 93809, 1.36, 17503.0, 5.37, 18, 17], ["WI", 65, 66915, 0.94, 17453.0, 3.7, 19, 22], ["PA", 129, 227069, 3.14, 17285.0, 5.48, 20, 5], ["RI", 9, 13958, 0.2, 17208.0, 2.67, 21, 47], ["TX", 240, 332232, 4.69, 17162.0, 6.32, 22, 4], ["DE", 6, 26876, 0.37, 17023.0, 3.25, 23, 39], ["NH", 13, 24659, 0.36, 16999.0, 3.81, 24, 40], ["GA", 88, 128054, 1.75, 16878.0, 4.92, 25, 14], ["IL", 115, 223982, 2.98, 16869.0, 4.19, 26, 7], ["NV", 22, 43038, 0.61, 16842.0, 8.84, 27, 33], ["SD", 15, 21074, 0.3, 16788.0, 4.23, 28, 41], ["NC", 81, 152408, 2.07, 16676.0, 3.72, 29, 11], ["ID", 15, 16326, 0.24, 16458.0, 4.29, 30, 43], ["NM", 25, 18370, 0.25, 16374.0, 4.09, 31, 42], ["VA", 71, 153255, 1.98, 16329.0, 4.39, 32, 12], ["OH", 116, 177100, 2.27, 16180.0, 4.03, 33, 10], ["TN", 77, 118691, 1.51, 15950.0, 4.72, 34, 15], ["MI", 87, 140175, 1.84, 15931.0, 3.37, 35, 13], ["KS", 45, 51595, 0.7, 15874.0, 5.71, 36, 28], ["MT", 11, 15027, 0.21, 15781.0, 2.9, 37, 45], ["SC", 51, 93263, 1.18, 15643.0, 5.14, 38, 21], ["ND", 6, 17156, 0.23, 15581.0, 3.12, 39, 44], ["MO", 65, 104952, 1.39, 15432.0, 4.5, 40, 16], ["OK", 67, 71453, 0.91, 15028.0, 5.12, 41, 24], ["AL", 69, 70322, 0.82, 14684.0, 5.37, 42, 26], ["KY", 60, 73349, 0.87, 14422.0, 4.73, 43, 25], ["FL", 166, 442286, 5.27, 14350.0, 7.02, 44, 3], ["IA", 31, 46389, 0.57, 14324.0, 3.99, 45, 34], ["WV", 23, 37699, 0.42, 14266.0, 4.03, 46, 36], ["IN", 80, 110234, 1.34, 14132.0, 4.71, 47, 19], ["LA", 76, 60953, 0.69, 13825.0, 4.73, 48, 29], ["AR", 42, 55312, 0.65, 13634.0, 3.93, 49, 31], ["MS", 51, 55640, 0.63, 13173.0, 4.5, 50, 32], ["VT", 6, 9306, 0.09, 12526.0, 4.06, 51, 50]]}, "q04_hospital_markup_outliers": {"columns": ["provider_name", "state", "hospital_ownership", "overall_rating", "discharges", "markup_ratio", "payment_per_discharge", "markup_rank"], "rows": [["Capital Health Medical Center - Hopewell", "NJ", "Voluntary non-profit - Private", 2, 1296, 23.07, 14742.0, 1], ["Capital Health Regional Medical Center", "NJ", "Voluntary non-profit - Private", 2, 897, 21.17, 18348.0, 2], ["Carepoint Health - Bayonne Medical Center", "NJ", "Voluntary non-profit - Private", 1, 643, 15.9, 17963.0, 3], ["Gadsden Regional Medical Center", "AL", "Proprietary", 2, 1080, 15.79, 9682.0, 4], ["Centennial Hills Hospital Medical Center", "NV", "Proprietary", 2, 2226, 15.65, 12895.0, 5], ["Summerlin Hospital Medical Center", "NV", "Proprietary", 3, 2363, 15.37, 13225.0, 6], ["Hca Florida Pasadena Hospital", "FL", "Proprietary", 4, 585, 14.99, 9771.0, 7], ["Doctors Medical Center", "CA", "Proprietary", 1, 2815, 14.95, 21526.0, 8], ["Western Arizona Regional Medical Center", "AZ", "Proprietary", 2, 773, 14.61, 11353.0, 9], ["Hca Florida South Shore Hospital", "FL", "Proprietary", 2, 1384, 14.52, 8176.0, 10], ["Hca Florida Fawcett Hospital", "FL", "Proprietary", 1, 2898, 14.43, 12110.0, 11], ["Sierra Medical Center", "TX", "Proprietary", 2, 665, 14.38, 15200.0, 12], ["Crestwood Medical Center", "AL", "Proprietary", 3, 1628, 14.11, 11142.0, 13], ["Hca Florida Twin Cities Hospital", "FL", "Proprietary", 5, 540, 14.05, 8388.0, 14], ["Henderson Hospital", "NV", "Proprietary", 2, 2583, 14.01, 12827.0, 15], ["Cjw Medical Center", "VA", "Proprietary", 4, 7590, 13.79, 14147.0, 16], ["Delray Medical Center", "FL", "Proprietary", 1, 5977, 13.77, 12481.0, 17], ["Brookwood Baptist Medical Center", "AL", "Proprietary", 3, 722, 13.66, 13006.0, 18], ["Swedish Medical Center", "CO", "Proprietary", 4, 2326, 13.65, 20014.0, 19], ["Alliancehealth Durant", "OK", "Proprietary", 1, 1468, 13.53, 8949.0, 20]]}, "q05_joint_replacement_price_variation": {"columns": ["state", "hospitals", "discharges", "avg_payment", "cheapest_hospital", "priciest_hospital", "within_state_spread_x", "cost_rank"], "rows": [["MD", 29, 1090, 26111.0, 18918.0, 59789.0, 3.2, 1], ["AK", 5, 348, 22859.0, 19601.0, 28613.0, 1.5, 2], ["NY", 59, 6994, 22841.0, 12418.0, 29665.0, 2.4, 3], ["CA", 132, 7729, 20684.0, 13452.0, 36188.0, 2.7, 4], ["CT", 12, 572, 19471.0, 16241.0, 27124.0, 1.7, 5], ["NM", 5, 248, 19409.0, 12117.0, 22988.0, 1.9, 6], ["OR", 14, 580, 19093.0, 15518.0, 22242.0, 1.4, 7], ["NV", 10, 361, 18197.0, 15702.0, 19713.0, 1.3, 8], ["MA", 38, 4508, 17690.0, 15023.0, 28585.0, 1.9, 9], ["NJ", 27, 1287, 17178.0, 14160.0, 24756.0, 1.7, 10], ["WA", 29, 933, 17125.0, 14400.0, 19759.0, 1.4, 11], ["UT", 14, 543, 16575.0, 13644.0, 19207.0, 1.4, 12], ["CO", 22, 683, 16048.0, 13048.0, 30292.0, 2.3, 13], ["NH", 7, 228, 16003.0, 13974.0, 24245.0, 1.7, 14], ["MN", 23, 1491, 15937.0, 13541.0, 23472.0, 1.7, 15], ["IL", 52, 3255, 15934.0, 12188.0, 35238.0, 2.9, 16], ["MI", 39, 1311, 15906.0, 12532.0, 22180.0, 1.8, 17], ["GA", 27, 635, 15766.0, 11516.0, 22736.0, 2.0, 18], ["WV", 13, 576, 15515.0, 11403.0, 18113.0, 1.6, 19], ["PA", 69, 4152, 15305.0, 11473.0, 22959.0, 2.0, 20], ["ID", 6, 109, 15256.0, 12672.0, 19628.0, 1.5, 21], ["NC", 43, 2805, 15191.0, 12662.0, 22596.0, 1.8, 22], ["VA", 33, 1502, 15059.0, 12114.0, 22899.0, 1.9, 23], ["SC", 24, 894, 14910.0, 12067.0, 25251.0, 2.1, 24], ["MT", 8, 263, 14860.0, 13632.0, 17827.0, 1.3, 25], ["FL", 88, 4583, 14786.0, 11120.0, 20084.0, 1.8, 26], ["AZ", 26, 1497, 14780.0, 12924.0, 24585.0, 1.9, 27], ["WI", 20, 875, 14710.0, 12604.0, 21968.0, 1.7, 28], ["TX", 85, 4659, 14643.0, 11429.0, 23553.0, 2.1, 29], ["OH", 49, 1731, 14539.0, 11550.0, 20485.0, 1.8, 30], ["AL", 27, 1188, 14500.0, 11679.0, 24129.0, 2.1, 31], ["TN", 29, 1373, 14472.0, 11946.0, 20419.0, 1.7, 32], ["LA", 16, 504, 14471.0, 11214.0, 26673.0, 2.4, 33], ["MO", 35, 1139, 14452.0, 11804.0, 20163.0, 1.7, 34], ["IN", 40, 1813, 14210.0, 12469.0, 17792.0, 1.4, 35], ["NE", 11, 416, 14146.0, 12480.0, 18616.0, 1.5, 36], ["SD", 10, 955, 13819.0, 12887.0, 17699.0, 1.4, 37], ["KS", 26, 2042, 13803.0, 11125.0, 19289.0, 1.7, 38], ["MS", 14, 676, 13560.0, 12310.0, 18789.0, 1.5, 39], ["KY", 11, 430, 13461.0, 12108.0, 16941.0, 1.4, 40], ["IA", 16, 1137, 13390.0, 11853.0, 17315.0, 1.5, 41], ["OK", 34, 2333, 13307.0, 11537.0, 21141.0, 1.8, 42], ["AR", 12, 512, 12583.0, 11671.0, 17278.0, 1.5, 43]]}, "q06_ownership_cost_comparison": {"columns": ["hospital_ownership", "hospitals", "discharges", "avg_charge_per_discharge", "avg_payment_per_discharge", "markup_ratio", "avg_star_rating"], "rows": [["Proprietary", 563, 622229, 123309.0, 15149.0, 8.14, 2.73], ["Physician", 62, 26889, 102598.0, 20171.0, 5.09, 4.02], ["Voluntary non-profit - Other", 241, 358703, 100869.0, 19870.0, 5.08, 3.47], ["Government - Hospital District or Authority", 203, 312009, 84414.0, 17948.0, 4.7, 3.26], ["Voluntary non-profit - Private", 1417, 2983814, 80111.0, 17866.0, 4.48, 3.44], ["Voluntary non-profit - Church", 201, 387794, 72752.0, 17207.0, 4.23, 3.43], ["Government - State", 36, 112757, 103560.0, 26843.0, 3.86, 3.39], ["Government - Local", 131, 120771, 67646.0, 17522.0, 3.86, 2.82]]}, "q07_star_rating_vs_cost": {"columns": ["star_rating", "hospitals", "discharges", "payment_per_discharge_all", "payment_per_discharge_drg470", "markup_ratio"], "rows": [[1, 170, 211062, 16428.0, 16046.0, 5.41], [2, 569, 887841, 16298.0, 16680.0, 5.15], [3, 846, 1497334, 16578.0, 16346.0, 4.79], [4, 773, 1483843, 17852.0, 16762.0, 4.83], [5, 287, 825024, 22083.0, 19356.0, 4.82]]}, "q08_rural_urban_divide": {"columns": ["area_type", "hospitals", "discharges", "payment_per_discharge", "markup_ratio", "pct_of_national_volume"], "rows": [["1. Metropolitan", 2097, 4469757, 18348.0, 4.95, 90.1], ["2. Micropolitan", 509, 318696, 12943.0, 3.78, 6.4], ["3. Small town", 194, 37183, 12993.0, 3.27, 0.7], ["4. Rural", 37, 12863, 13314.0, 3.79, 0.3], ["5. Unknown", 108, 121826, 13299.0, 5.11, 2.5]]}, "q09_signature_drg_per_state": {"columns": ["state", "drg_code", "top_drg", "discharges", "pct_of_state_volume"], "rows": [["CA", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 66956, 15.2], ["FL", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 45920, 10.4], ["TX", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 40753, 12.3], ["NY", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 38616, 11.7], ["IL", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 23483, 10.5], ["PA", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 22726, 10.0], ["VA", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 18648, 12.2], ["NJ", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 18168, 10.5], ["OH", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 16815, 9.5], ["GA", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 15238, 11.9], ["NC", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 14902, 9.8], ["MA", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 14894, 8.1], ["MD", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 14012, 10.7], ["TN", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 13917, 11.7], ["MI", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 13831, 9.9], ["IN", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 11349, 10.3], ["AZ", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 10709, 11.4], ["MO", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 10635, 10.1], ["WA", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 9916, 11.8], ["SC", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 9624, 10.3], ["OK", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 8994, 12.6], ["KY", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 8928, 12.2], ["WI", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 7593, 11.3], ["MS", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 7534, 13.5], ["LA", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 7350, 12.1], ["AL", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 7128, 10.1], ["CT", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 7047, 12.6], ["MN", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 7006, 9.6], ["AR", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 6605, 11.9], ["CO", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 6281, 13.5], ["KS", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 6200, 12.0], ["NV", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 5377, 12.5], ["IA", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 4966, 10.7], ["OR", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 4395, 12.1], ["WV", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 4007, 10.6], ["NE", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 3697, 11.1], ["UT", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 3464, 15.0], ["NM", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 3032, 16.5], ["NH", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 2489, 10.1], ["ID", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 2176, 13.3], ["DE", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 2111, 7.9], ["SD", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 1841, 8.7], ["MT", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 1819, 12.1], ["ND", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 1803, 10.5], ["ME", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 1725, 12.5], ["HI", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 1545, 14.2], ["AK", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 1322, 14.1], ["DC", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 1304, 8.0], ["VT", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 1085, 11.7], ["RI", "291", "HEART FAILURE AND SHOCK WITH MCC", 1059, 7.6], ["WY", "871", "SEPTICEMIA OR SEVERE SEPSIS WITHOUT MV >96 HOURS WITH MCC", 823, 14.2]]}, "q10_market_concentration": {"columns": ["state", "hospitals", "total_discharges", "top3_share_pct", "top10_share_pct"], "rows": [["DE", 6, 26876, 90.2, 100.0], ["VT", 6, 9306, 83.6, 100.0], ["WY", 9, 5800, 81.4, 100.0], ["DC", 6, 16246, 79.2, 100.0], ["AK", 8, 9387, 74.8, 100.0], ["RI", 9, 13958, 74.4, 100.0], ["SD", 15, 21074, 72.6, 96.1], ["ND", 6, 17156, 70.8, 100.0], ["HI", 12, 10883, 67.5, 98.8], ["ME", 17, 13805, 62.4, 93.0], ["ID", 15, 16326, 61.0, 96.4], ["MT", 11, 15027, 57.4, 99.4], ["UT", 29, 23134, 54.6, 88.1], ["NE", 24, 33434, 53.8, 82.2], ["NM", 25, 18370, 53.1, 88.7], ["NH", 13, 24659, 45.3, 93.4], ["WV", 23, 37699, 44.1, 82.4], ["CT", 26, 55936, 41.3, 72.7], ["KS", 45, 51595, 40.9, 72.9], ["IA", 31, 46389, 39.0, 75.3], ["NV", 22, 43038, 38.8, 79.8], ["MN", 45, 73158, 34.9, 72.2], ["KY", 60, 73349, 32.0, 63.5], ["CO", 48, 46569, 32.0, 62.9], ["OR", 30, 36366, 31.7, 73.6], ["MS", 51, 55640, 30.5, 72.9], ["AL", 69, 70322, 30.4, 56.9], ["WI", 65, 66915, 30.1, 59.7], ["LA", 76, 60953, 26.8, 62.1], ["OK", 67, 71453, 26.5, 61.3], ["AR", 42, 55312, 23.8, 61.6], ["TN", 77, 118691, 23.8, 55.8], ["SC", 51, 93263, 23.5, 59.8], ["AZ", 58, 93809, 21.1, 49.2], ["IN", 80, 110234, 20.7, 46.6], ["MO", 65, 104952, 20.0, 48.7], ["NY", 129, 329669, 20.0, 39.9], ["MA", 54, 183445, 19.9, 52.2], ["NC", 81, 152408, 18.2, 46.2], ["MI", 87, 140175, 18.1, 43.4], ["WA", 45, 84147, 17.5, 47.6], ["MD", 44, 130663, 16.9, 44.0], ["GA", 88, 128054, 16.9, 38.4], ["VA", 71, 153255, 16.5, 43.2], ["NJ", 63, 172827, 15.9, 43.3], ["OH", 116, 177100, 15.6, 36.1], ["FL", 166, 442286, 13.6, 28.4], ["PA", 129, 227069, 13.5, 33.9], ["IL", 115, 223982, 13.2, 33.5], ["TX", 240, 332232, 11.3, 24.5], ["CA", 275, 441929, 7.8, 18.3]]}, "q11_beneficiary_burden": {"columns": ["drg_code", "drg_desc", "discharges", "avg_total_payment", "avg_medicare_payment", "avg_gap_per_discharge", "gap_pct_of_payment"], "rows": [["219", "CARDIAC VALVE AND OTHER MAJOR CARDIOTHORACIC PROCEDURES WITHOUT CARDIAC CATHETERIZATION", 11687, 83621.0, 70520.0, 13101.0, 15.7], ["454", "COMBINED ANTERIOR AND POSTERIOR SPINAL FUSION WITH CC", 19004, 57029.0, 48129.0, 8900.0, 15.6], ["023", "CRANIOTOMY WITH MAJOR DEVICE IMPLANT OR ACUTE COMPLEX CNS PRINCIPAL DIAGNOSIS WITH MCC O", 11156, 55050.0, 47107.0, 7943.0, 14.4], ["236", "CORONARY BYPASS WITHOUT CARDIAC CATHETERIZATION WITHOUT MCC", 12870, 36254.0, 28735.0, 7519.0, 20.7], ["025", "CRANIOTOMY AND ENDOVASCULAR INTRACRANIAL PROCEDURES WITH MCC", 20387, 44921.0, 37545.0, 7376.0, 16.4], ["870", "SEPTICEMIA OR SEVERE SEPSIS WITH MV >96 HOURS", 21332, 63211.0, 56222.0, 6989.0, 11.1], ["270", "OTHER MAJOR CARDIOVASCULAR PROCEDURES WITH MCC", 11355, 50901.0, 43940.0, 6960.0, 13.7], ["455", "COMBINED ANTERIOR AND POSTERIOR SPINAL FUSION WITHOUT CC/MCC", 15538, 40949.0, 34163.0, 6786.0, 16.6], ["981", "EXTENSIVE O.R. PROCEDURES UNRELATED TO PRINCIPAL DIAGNOSIS WITH MCC", 15028, 45418.0, 38885.0, 6532.0, 14.4], ["329", "MAJOR SMALL AND LARGE BOWEL PROCEDURES WITH MCC", 23889, 42588.0, 36479.0, 6110.0, 14.3], ["460", "SPINAL FUSION EXCEPT CERVICAL WITHOUT MCC", 26777, 33492.0, 27655.0, 5837.0, 17.4], ["853", "INFECTIOUS AND PARASITIC DISEASES WITH O.R. PROCEDURES WITH MCC", 78526, 44839.0, 39114.0, 5726.0, 12.8], ["472", "CERVICAL SPINAL FUSION WITH CC", 10395, 28054.0, 22774.0, 5279.0, 18.8], ["164", "MAJOR CHEST PROCEDURES WITH CC", 11737, 25066.0, 20198.0, 4868.0, 19.4], ["330", "MAJOR SMALL AND LARGE BOWEL PROCEDURES WITH CC", 33469, 22400.0, 17911.0, 4489.0, 20.0]]}, "q12_volume_vs_cost": {"columns": ["volume_quartile", "quartile_label", "hospitals", "min_cases", "max_cases", "payment_per_case", "unweighted_avg_payment"], "rows": [[1, "Q1 - lowest volume", 328, 11, 17, 16374.0, 16335.0], [2, "Q2", 328, 18, 29, 16607.0, 16593.0], [3, "Q3", 328, 29, 58, 16192.0, 16185.0], [4, "Q4 - highest volume", 327, 59, 1086, 17042.0, 16719.0]]}};
+
+/* ---------- helpers ---------- */
+const rowsOf = q => DATA[q].rows.map(r => Object.fromEntries(DATA[q].columns.map((c,i)=>[c,r[i]])));
+const fmt = (v,f)=>{ if(v==null) return '–';
+  if(f==='usd')  return v>=1e3 ? '$'+v.toLocaleString(undefined,{maximumFractionDigits:0}) : '$'+v;
+  if(f==='num')  return typeof v==='number' ? v.toLocaleString(undefined,{maximumFractionDigits:2}) : v;
+  return v; };
+const trunc = (s,n)=> s.length>n ? s.slice(0,n-1)+'…' : s;
+Chart.defaults.animation = false;
+Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ---------- KPIs (q01) ---------- */
+const k = rowsOf('q01_national_kpis')[0];
+document.getElementById('kpiRow').innerHTML = [
+  ['Hospitals', k.hospitals.toLocaleString(), 'IPPS acute-care facilities'],
+  ['Discharges', (k.total_discharges/1e6).toFixed(2)+'M', 'Original Medicare Part A'],
+  ['Medicare payments', '$'+k.medicare_payments_usd_bn.toFixed(1)+'B', 'of $'+k.total_payments_usd_bn.toFixed(1)+'B total payments'],
+  ['Avg payment / discharge', '$'+Math.round(k.avg_payment_per_discharge).toLocaleString(), 'volume-weighted'],
+  ['Charge-to-payment ratio', k.charge_to_payment_ratio.toFixed(1)+'×', 'hospitals bill '+k.charge_to_payment_ratio.toFixed(1)+'× what is paid'],
+].map(([l,v,n])=>`<div class="kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join('');
+
+/* ---------- Chart 1: top DRGs (q02) ---------- */
+const drg = rowsOf('q02_top_drgs_volume_spend').slice(0,10);
+new Chart(chDrg,{type:'bar',
+  data:{labels:drg.map(d=>trunc(d.drg_code+' · '+d.drg_desc,58)),
+    datasets:[{data:drg.map(d=>d.medicare_spend_usd_bn),backgroundColor:css('--c1')+'CC',borderColor:css('--c1'),borderWidth:1,borderRadius:4}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` $${c.parsed.x.toFixed(2)}B  (${drg[c.dataIndex].pct_of_total_spend}% of national spend)`}}},
+    scales:{x:{ticks:{callback:v=>'$'+v+'B'},grid:{display:true}},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:11}}}}}});
+
+/* ---------- Chart 2: states (q03) ---------- */
+const stAll = rowsOf('q03_state_spending_rankings');
+const st = stAll.slice(0,20);
+let stView = [...st];
+const stateView = sel => (sel && !st.some(s=>s.state===sel)) ? [...st, stAll.find(s=>s.state===sel)] : [...st];
+const stateColors = sel => stView.map(s=>s.state===sel?css('--c2'):css('--c1')+'B3');
+const chStateObj = new Chart(chState,{type:'bar',
+  data:{labels:stView.map(s=>s.state),
+    datasets:[{data:stView.map(s=>s.payment_per_discharge),backgroundColor:stateColors(''),borderRadius:3}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const s=stView[c.dataIndex];return [` $${c.parsed.y.toLocaleString()} per discharge (cost rank #${s.cost_rank} of ${stAll.length})`,` ${s.hospitals} hospitals · ${(s.discharges/1e3).toFixed(0)}k discharges`];}}}},
+    scales:{y:{ticks:{callback:v=>'$'+(v/1000)+'k'}},x:{grid:{display:false}}}}});
+
+/* ---------- Chart 3: star rating vs cost (q07) ---------- */
+const rt = rowsOf('q07_star_rating_vs_cost');
+new Chart(chRating,{type:'bar',
+  data:{labels:rt.map(r=>r.star_rating+' ★'),
+    datasets:[
+      {label:'All DRGs',data:rt.map(r=>r.payment_per_discharge_all),backgroundColor:css('--c1')+'CC',borderRadius:3},
+      {label:'Joint replacement (DRG 470)',data:rt.map(r=>r.payment_per_discharge_drg470),backgroundColor:css('--c3')+'CC',borderRadius:3}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'top',labels:{usePointStyle:true}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: $${c.parsed.y.toLocaleString()}`}}},
+    scales:{y:{ticks:{callback:v=>'$'+(v/1000)+'k'}},x:{grid:{display:false}}}}});
+
+/* ---------- Chart 4: ownership markup (q06) ---------- */
+const ow = rowsOf('q06_ownership_cost_comparison');
+new Chart(chOwner,{type:'bar',
+  data:{labels:ow.map(o=>trunc(o.hospital_ownership,34)),
+    datasets:[{data:ow.map(o=>o.markup_ratio),backgroundColor:ow.map((_,i)=>[css('--c4'),css('--c2'),css('--c6'),css('--c1'),css('--c5'),css('--c3')][i%6]+'CC'),borderRadius:4}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const o=ow[c.dataIndex];return [` bills ${c.parsed.x}× what it is paid`,` $${o.avg_payment_per_discharge.toLocaleString()} avg payment · ${o.hospitals} hospitals`];}}}},
+    scales:{x:{ticks:{callback:v=>v+'×'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
+
+/* ---------- Chart 5: rural/urban (q08) ---------- */
+const ru = rowsOf('q08_rural_urban_divide').filter(r=>!r.area_type.includes('Unknown'));
+new Chart(chRuca,{type:'doughnut',
+  data:{labels:ru.map(r=>r.area_type.replace(/^\d\.\s/,'')),
+    datasets:[{data:ru.map(r=>r.pct_of_national_volume),backgroundColor:[css('--c1'),css('--c3'),css('--c6'),css('--c2')].map(c=>c+'CC'),borderColor:'#fff',borderWidth:2}]},
+  options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+    plugins:{legend:{position:'right',labels:{usePointStyle:true}},
+      tooltip:{callbacks:{label:c=>{const r=ru[c.dataIndex];return ` ${c.parsed}% of discharges · $${r.payment_per_discharge.toLocaleString()}/discharge`;}}}}}});
+
+/* ---------- state highlight ---------- */
+const sel = document.getElementById('stateSel');
+stAll.map(s=>s.state).sort().forEach(s=>{const o=document.createElement('option');o.value=o.textContent=s;sel.appendChild(o);});
+const topDrgBy = Object.fromEntries(rowsOf('q09_signature_drg_per_state').map(r=>[r.state,r]));
+function onStateChange(){
+  const v = sel.value;
+  stView = stateView(v);
+  chStateObj.data.labels = stView.map(s=>s.state);
+  chStateObj.data.datasets[0].data = stView.map(s=>s.payment_per_discharge);
+  chStateObj.data.datasets[0].backgroundColor = stateColors(v);
+  chStateObj.update('none');
+  const spot = document.getElementById('stateSpot');
+  if(!v){ spot.textContent=''; return; }
+  const s = stAll.find(x=>x.state===v), d = topDrgBy[v];
+  spot.innerHTML = `<b>${v}</b>: $${s.payment_per_discharge.toLocaleString()} per discharge (cost rank <b>#${s.cost_rank}</b> of ${stAll.length}) · ${s.hospitals} hospitals · $${s.medicare_spend_usd_bn}B Medicare spend · markup ${s.markup_ratio}×` + (d?` · most common DRG: ${d.top_drg.toLowerCase()} (${d.pct_of_state_volume}% of volume)`:'');
+}
+
+/* ---------- query explorer ---------- */
+const qsel = document.getElementById('querySel');
+Object.keys(DATA).forEach(q=>{const o=document.createElement('option');o.value=q;o.textContent=q.replace(/_/g,' ');qsel.appendChild(o);});
+let sortCol=null, sortDir=-1;
+function renderTable(){
+  const q=qsel.value, cols=DATA[q].columns;
+  let rows=[...DATA[q].rows];
+  if(sortCol!=null){const i=sortCol;rows.sort((a,b)=>{const x=a[i],y=b[i];return (x==null?-1:y==null?1:(x<y?-1:x>y?1:0))*sortDir;});}
+  const host=document.getElementById('tableHost');
+  host.innerHTML='<table class="data"><thead><tr>'+
+    cols.map((c,i)=>`<th onclick="sortBy(${i})">${c.replace(/_/g,' ')}${sortCol===i?(sortDir===1?' ▲':' ▼'):''}</th>`).join('')+
+    '</tr></thead><tbody>'+
+    rows.slice(0,200).map(r=>'<tr>'+r.map(v=>`<td>${typeof v==='number'?v.toLocaleString(undefined,{maximumFractionDigits:2}):(v??'–')}</td>`).join('')+'</tr>').join('')+
+    '</tbody></table>'+(rows.length>200?`<div class="hint" style="margin-top:8px">Showing 200 of ${rows.length} rows — full results in outputs/results/${q}.csv</div>`:'');
+}
+function sortBy(i){ if(sortCol===i){sortDir*=-1;}else{sortCol=i;sortDir=-1;} renderTable(); }
+qsel.addEventListener('change',()=>{sortCol=null;sortDir=-1;});
+renderTable();
+</script>
+</body>
+</html>

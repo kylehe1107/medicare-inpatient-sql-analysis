@@ -1,0 +1,6 @@
+# Raw data — too large for git; re-download links in README
+data/*.csv
+data/*.CSV
+
+# OS noise
+.DS_Store

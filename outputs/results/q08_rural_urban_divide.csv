@@ -1,0 +1,6 @@
+area_type,hospitals,discharges,payment_per_discharge,markup_ratio,pct_of_national_volume
+1. Metropolitan,2097,4469757,18348.0,4.95,90.1
+2. Micropolitan,509,318696,12943.0,3.78,6.4
+3. Small town,194,37183,12993.0,3.27,0.7
+4. Rural,37,12863,13314.0,3.79,0.3
+5. Unknown,108,121826,13299.0,5.11,2.5

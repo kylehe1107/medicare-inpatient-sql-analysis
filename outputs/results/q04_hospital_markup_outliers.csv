@@ -1,0 +1,21 @@
+provider_name,state,hospital_ownership,overall_rating,discharges,markup_ratio,payment_per_discharge,markup_rank
+Capital Health Medical Center - Hopewell,NJ,Voluntary non-profit - Private,2,1296,23.07,14742.0,1
+Capital Health Regional Medical Center,NJ,Voluntary non-profit - Private,2,897,21.17,18348.0,2
+Carepoint Health - Bayonne Medical Center,NJ,Voluntary non-profit - Private,1,643,15.9,17963.0,3
+Gadsden Regional Medical Center,AL,Proprietary,2,1080,15.79,9682.0,4
+Centennial Hills Hospital Medical Center,NV,Proprietary,2,2226,15.65,12895.0,5
+Summerlin Hospital Medical Center,NV,Proprietary,3,2363,15.37,13225.0,6
+Hca Florida Pasadena Hospital,FL,Proprietary,4,585,14.99,9771.0,7
+Doctors Medical Center,CA,Proprietary,1,2815,14.95,21526.0,8
+Western Arizona Regional Medical Center,AZ,Proprietary,2,773,14.61,11353.0,9
+Hca Florida South Shore Hospital,FL,Proprietary,2,1384,14.52,8176.0,10
+Hca Florida Fawcett Hospital,FL,Proprietary,1,2898,14.43,12110.0,11
+Sierra Medical Center,TX,Proprietary,2,665,14.38,15200.0,12
+Crestwood Medical Center,AL,Proprietary,3,1628,14.11,11142.0,13
+Hca Florida Twin Cities Hospital,FL,Proprietary,5,540,14.05,8388.0,14
+Henderson Hospital,NV,Proprietary,2,2583,14.01,12827.0,15
+Cjw Medical Center,VA,Proprietary,4,7590,13.79,14147.0,16
+Delray Medical Center,FL,Proprietary,1,5977,13.77,12481.0,17
+Brookwood Baptist Medical Center,AL,Proprietary,3,722,13.66,13006.0,18
+Swedish Medical Center,CO,Proprietary,4,2326,13.65,20014.0,19
+Alliancehealth Durant,OK,Proprietary,1,1468,13.53,8949.0,20

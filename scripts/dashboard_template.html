@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medicare Inpatient Cost &amp; Quality Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+<style>
+:root {
+  --bg-primary:#f6f7f9; --bg-card:#ffffff; --bg-header:#12263a;
+  --text-primary:#1f2937; --text-secondary:#6b7280; --text-on-dark:#ffffff;
+  --c1:#2c7fb8; --c2:#e07a5f; --c3:#41ab5d; --c4:#c44e52; --c5:#8172b3; --c6:#e0a800;
+  --gap:16px; --radius:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.5}
+.wrap{max-width:1400px;margin:0 auto;padding:var(--gap)}
+header.dash{background:var(--bg-header);color:var(--text-on-dark);padding:20px 24px;border-radius:var(--radius);margin-bottom:var(--gap);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+header.dash h1{font-size:20px;font-weight:650}
+header.dash .sub{font-size:12.5px;color:rgba(255,255,255,.65);margin-top:2px}
+.filter-group{display:flex;align-items:center;gap:8px}
+.filter-group label{font-size:12px;color:rgba(255,255,255,.7)}
+.filter-group select{padding:6px 10px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(255,255,255,.1);color:#fff;font-size:13px}
+.filter-group select option{background:var(--bg-header)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--gap);margin-bottom:var(--gap)}
+.kpi{background:var(--bg-card);border-radius:var(--radius);padding:18px 22px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.kpi .label{font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.kpi .value{font-size:27px;font-weight:700}
+.kpi .note{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:var(--gap);margin-bottom:var(--gap)}
+.card{background:var(--bg-card);border-radius:var(--radius);padding:18px 22px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card h3{font-size:14px;font-weight:600;margin-bottom:2px}
+.card .hint{font-size:12px;color:var(--text-secondary);margin-bottom:12px}
+.card canvas{max-height:320px}
+.tablecard{margin-bottom:var(--gap);overflow-x:auto}
+.tablebar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.tablebar select{padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff;color:var(--text-primary)}
+table.data{width:100%;border-collapse:collapse;font-size:13px}
+table.data thead th{text-align:left;padding:9px 12px;border-bottom:2px solid #e5e7eb;color:var(--text-secondary);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;cursor:pointer;user-select:none}
+table.data thead th:hover{color:var(--text-primary);background:#f8f9fa}
+table.data tbody td{padding:8px 12px;border-bottom:1px solid #f1f2f4;white-space:nowrap}
+table.data tbody tr:hover{background:#f8f9fa}
+footer{font-size:12px;color:var(--text-secondary);padding:8px 4px 24px}
+@media(max-width:768px){.charts{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media print{.filter-group{display:none}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="dash">
+    <div>
+      <h1>Medicare Inpatient Care: Cost &amp; Quality</h1>
+      <div class="sub">CMS Medicare Inpatient Hospitals (by Provider &amp; Service) &times; Care Compare star ratings &mdash; analyzed in SQL</div>
+    </div>
+    <div class="filter-group">
+      <label for="stateSel">Highlight state</label>
+      <select id="stateSel" onchange="onStateChange()"><option value="">None</option></select>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpiRow"></section>
+
+  <section class="charts">
+    <div class="card" style="grid-column:1/-1">
+      <h3>Where the money goes: top MS-DRGs by Medicare spend</h3>
+      <div class="hint">Volume-weighted; share of total national inpatient Medicare payments</div>
+      <canvas id="chDrg"></canvas>
+    </div>
+    <div class="card">
+      <h3>Average payment per discharge by state (top 20)</h3>
+      <div class="hint">Volume-weighted across all DRGs &mdash; use the header dropdown to spotlight any state</div>
+      <canvas id="chState"></canvas>
+      <div class="hint" id="stateSpot" style="margin:10px 0 0"></div>
+    </div>
+    <div class="card">
+      <h3>Do 5-star hospitals cost more?</h3>
+      <div class="hint">Payment per discharge by Care Compare overall rating</div>
+      <canvas id="chRating"></canvas>
+    </div>
+    <div class="card">
+      <h3>Billing markup by hospital ownership</h3>
+      <div class="hint">Billed charges &divide; actual payments, volume-weighted</div>
+      <canvas id="chOwner"></canvas>
+    </div>
+    <div class="card">
+      <h3>Where care happens: rural vs urban volume</h3>
+      <div class="hint">Share of national discharges by RUCA area type</div>
+      <canvas id="chRuca"></canvas>
+    </div>
+  </section>
+
+  <section class="card tablecard">
+    <div class="tablebar">
+      <div>
+        <h3>Query explorer</h3>
+        <div class="hint">Full result set of each SQL analysis &mdash; click headers to sort</div>
+      </div>
+      <select id="querySel" onchange="renderTable()"></select>
+    </div>
+    <div id="tableHost"></div>
+  </section>
+
+  <footer>
+    Source: CMS Medicare Inpatient Hospitals &ndash; by Provider and Service; CMS Hospital General Information.
+    Original Medicare (fee-for-service) Part A only; rows with &lt;11 discharges suppressed by CMS.
+    Built with PostgreSQL &rarr; Chart.js.
+  </footer>
+</div>
+
+<script>
+const DATA = /*__DATA__*/;
+
+/* ---------- helpers ---------- */
+const rowsOf = q => DATA[q].rows.map(r => Object.fromEntries(DATA[q].columns.map((c,i)=>[c,r[i]])));
+const fmt = (v,f)=>{ if(v==null) return '–';
+  if(f==='usd')  return v>=1e3 ? '$'+v.toLocaleString(undefined,{maximumFractionDigits:0}) : '$'+v;
+  if(f==='num')  return typeof v==='number' ? v.toLocaleString(undefined,{maximumFractionDigits:2}) : v;
+  return v; };
+const trunc = (s,n)=> s.length>n ? s.slice(0,n-1)+'…' : s;
+Chart.defaults.animation = false;
+Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ---------- KPIs (q01) ---------- */
+const k = rowsOf('q01_national_kpis')[0];
+document.getElementById('kpiRow').innerHTML = [
+  ['Hospitals', k.hospitals.toLocaleString(), 'IPPS acute-care facilities'],
+  ['Discharges', (k.total_discharges/1e6).toFixed(2)+'M', 'Original Medicare Part A'],
+  ['Medicare payments', '$'+k.medicare_payments_usd_bn.toFixed(1)+'B', 'of $'+k.total_payments_usd_bn.toFixed(1)+'B total payments'],
+  ['Avg payment / discharge', '$'+Math.round(k.avg_payment_per_discharge).toLocaleString(), 'volume-weighted'],
+  ['Charge-to-payment ratio', k.charge_to_payment_ratio.toFixed(1)+'×', 'hospitals bill '+k.charge_to_payment_ratio.toFixed(1)+'× what is paid'],
+].map(([l,v,n])=>`<div class="kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join('');
+
+/* ---------- Chart 1: top DRGs (q02) ---------- */
+const drg = rowsOf('q02_top_drgs_volume_spend').slice(0,10);
+new Chart(chDrg,{type:'bar',
+  data:{labels:drg.map(d=>trunc(d.drg_code+' · '+d.drg_desc,58)),
+    datasets:[{data:drg.map(d=>d.medicare_spend_usd_bn),backgroundColor:css('--c1')+'CC',borderColor:css('--c1'),borderWidth:1,borderRadius:4}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` $${c.parsed.x.toFixed(2)}B  (${drg[c.dataIndex].pct_of_total_spend}% of national spend)`}}},
+    scales:{x:{ticks:{callback:v=>'$'+v+'B'},grid:{display:true}},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:11}}}}}});
+
+/* ---------- Chart 2: states (q03) ---------- */
+const stAll = rowsOf('q03_state_spending_rankings');
+const st = stAll.slice(0,20);
+let stView = [...st];
+const stateView = sel => (sel && !st.some(s=>s.state===sel)) ? [...st, stAll.find(s=>s.state===sel)] : [...st];
+const stateColors = sel => stView.map(s=>s.state===sel?css('--c2'):css('--c1')+'B3');
+const chStateObj = new Chart(chState,{type:'bar',
+  data:{labels:stView.map(s=>s.state),
+    datasets:[{data:stView.map(s=>s.payment_per_discharge),backgroundColor:stateColors(''),borderRadius:3}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const s=stView[c.dataIndex];return [` $${c.parsed.y.toLocaleString()} per discharge (cost rank #${s.cost_rank} of ${stAll.length})`,` ${s.hospitals} hospitals · ${(s.discharges/1e3).toFixed(0)}k discharges`];}}}},
+    scales:{y:{ticks:{callback:v=>'$'+(v/1000)+'k'}},x:{grid:{display:false}}}}});
+
+/* ---------- Chart 3: star rating vs cost (q07) ---------- */
+const rt = rowsOf('q07_star_rating_vs_cost');
+new Chart(chRating,{type:'bar',
+  data:{labels:rt.map(r=>r.star_rating+' ★'),
+    datasets:[
+      {label:'All DRGs',data:rt.map(r=>r.payment_per_discharge_all),backgroundColor:css('--c1')+'CC',borderRadius:3},
+      {label:'Joint replacement (DRG 470)',data:rt.map(r=>r.payment_per_discharge_drg470),backgroundColor:css('--c3')+'CC',borderRadius:3}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'top',labels:{usePointStyle:true}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: $${c.parsed.y.toLocaleString()}`}}},
+    scales:{y:{ticks:{callback:v=>'$'+(v/1000)+'k'}},x:{grid:{display:false}}}}});
+
+/* ---------- Chart 4: ownership markup (q06) ---------- */
+const ow = rowsOf('q06_ownership_cost_comparison');
+new Chart(chOwner,{type:'bar',
+  data:{labels:ow.map(o=>trunc(o.hospital_ownership,34)),
+    datasets:[{data:ow.map(o=>o.markup_ratio),backgroundColor:ow.map((_,i)=>[css('--c4'),css('--c2'),css('--c6'),css('--c1'),css('--c5'),css('--c3')][i%6]+'CC'),borderRadius:4}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const o=ow[c.dataIndex];return [` bills ${c.parsed.x}× what it is paid`,` $${o.avg_payment_per_discharge.toLocaleString()} avg payment · ${o.hospitals} hospitals`];}}}},
+    scales:{x:{ticks:{callback:v=>v+'×'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
+
+/* ---------- Chart 5: rural/urban (q08) ---------- */
+const ru = rowsOf('q08_rural_urban_divide').filter(r=>!r.area_type.includes('Unknown'));
+new Chart(chRuca,{type:'doughnut',
+  data:{labels:ru.map(r=>r.area_type.replace(/^\d\.\s/,'')),
+    datasets:[{data:ru.map(r=>r.pct_of_national_volume),backgroundColor:[css('--c1'),css('--c3'),css('--c6'),css('--c2')].map(c=>c+'CC'),borderColor:'#fff',borderWidth:2}]},
+  options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+    plugins:{legend:{position:'right',labels:{usePointStyle:true}},
+      tooltip:{callbacks:{label:c=>{const r=ru[c.dataIndex];return ` ${c.parsed}% of discharges · $${r.payment_per_discharge.toLocaleString()}/discharge`;}}}}}});
+
+/* ---------- state highlight ---------- */
+const sel = document.getElementById('stateSel');
+stAll.map(s=>s.state).sort().forEach(s=>{const o=document.createElement('option');o.value=o.textContent=s;sel.appendChild(o);});
+const topDrgBy = Object.fromEntries(rowsOf('q09_signature_drg_per_state').map(r=>[r.state,r]));
+function onStateChange(){
+  const v = sel.value;
+  stView = stateView(v);
+  chStateObj.data.labels = stView.map(s=>s.state);
+  chStateObj.data.datasets[0].data = stView.map(s=>s.payment_per_discharge);
+  chStateObj.data.datasets[0].backgroundColor = stateColors(v);
+  chStateObj.update('none');
+  const spot = document.getElementById('stateSpot');
+  if(!v){ spot.textContent=''; return; }
+  const s = stAll.find(x=>x.state===v), d = topDrgBy[v];
+  spot.innerHTML = `<b>${v}</b>: $${s.payment_per_discharge.toLocaleString()} per discharge (cost rank <b>#${s.cost_rank}</b> of ${stAll.length}) · ${s.hospitals} hospitals · $${s.medicare_spend_usd_bn}B Medicare spend · markup ${s.markup_ratio}×` + (d?` · most common DRG: ${d.top_drg.toLowerCase()} (${d.pct_of_state_volume}% of volume)`:'');
+}
+
+/* ---------- query explorer ---------- */
+const qsel = document.getElementById('querySel');
+Object.keys(DATA).forEach(q=>{const o=document.createElement('option');o.value=q;o.textContent=q.replace(/_/g,' ');qsel.appendChild(o);});
+let sortCol=null, sortDir=-1;
+function renderTable(){
+  const q=qsel.value, cols=DATA[q].columns;
+  let rows=[...DATA[q].rows];
+  if(sortCol!=null){const i=sortCol;rows.sort((a,b)=>{const x=a[i],y=b[i];return (x==null?-1:y==null?1:(x<y?-1:x>y?1:0))*sortDir;});}
+  const host=document.getElementById('tableHost');
+  host.innerHTML='<table class="data"><thead><tr>'+
+    cols.map((c,i)=>`<th onclick="sortBy(${i})">${c.replace(/_/g,' ')}${sortCol===i?(sortDir===1?' ▲':' ▼'):''}</th>`).join('')+
+    '</tr></thead><tbody>'+
+    rows.slice(0,200).map(r=>'<tr>'+r.map(v=>`<td>${typeof v==='number'?v.toLocaleString(undefined,{maximumFractionDigits:2}):(v??'–')}</td>`).join('')+'</tr>').join('')+
+    '</tbody></table>'+(rows.length>200?`<div class="hint" style="margin-top:8px">Showing 200 of ${rows.length} rows — full results in outputs/results/${q}.csv</div>`:'');
+}
+function sortBy(i){ if(sortCol===i){sortDir*=-1;}else{sortCol=i;sortDir=-1;} renderTable(); }
+qsel.addEventListener('change',()=>{sortCol=null;sortDir=-1;});
+renderTable();
+</script>
+</body>
+</html>

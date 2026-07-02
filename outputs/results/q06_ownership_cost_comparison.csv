@@ -1,0 +1,9 @@
+hospital_ownership,hospitals,discharges,avg_charge_per_discharge,avg_payment_per_discharge,markup_ratio,avg_star_rating
+Proprietary,563,622229,123309.0,15149.0,8.14,2.73
+Physician,62,26889,102598.0,20171.0,5.09,4.02
+Voluntary non-profit - Other,241,358703,100869.0,19870.0,5.08,3.47
+Government - Hospital District or Authority,203,312009,84414.0,17948.0,4.7,3.26
+Voluntary non-profit - Private,1417,2983814,80111.0,17866.0,4.48,3.44
+Voluntary non-profit - Church,201,387794,72752.0,17207.0,4.23,3.43
+Government - State,36,112757,103560.0,26843.0,3.86,3.39
+Government - Local,131,120771,67646.0,17522.0,3.86,2.82

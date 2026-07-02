@@ -1,0 +1,5 @@
+volume_quartile,quartile_label,hospitals,min_cases,max_cases,payment_per_case,unweighted_avg_payment
+1,Q1 - lowest volume,328,11,17,16374.0,16335.0
+2,Q2,328,18,29,16607.0,16593.0
+3,Q3,328,29,58,16192.0,16185.0
+4,Q4 - highest volume,327,59,1086,17042.0,16719.0

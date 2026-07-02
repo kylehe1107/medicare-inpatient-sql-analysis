@@ -1,0 +1,2 @@
+hospitals,distinct_drgs,total_discharges,billed_charges_usd_bn,total_payments_usd_bn,medicare_payments_usd_bn,charge_to_payment_ratio,avg_payment_per_discharge
+2945,534,4960325,432.17,88.41,73.39,4.89,17824.0
