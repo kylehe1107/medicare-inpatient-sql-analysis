@@ -201,7 +201,7 @@ function onStateChange(){
 
 /* ---------- query explorer ---------- */
 const qsel = document.getElementById('querySel');
-Object.keys(DATA).forEach(q=>{const o=document.createElement('option');o.value=q;o.textContent=q.replace(/_/g,' ');qsel.appendChild(o);});
+Object.keys(DATA).forEach(q=>{const o=document.createElement('option');o.value=q;o.textContent=q.replace(/^q\d+_/,'').replace(/_/g,' ');qsel.appendChild(o);});
 let sortCol=null, sortDir=-1;
 function renderTable(){
   const q=qsel.value, cols=DATA[q].columns;
